@@ -24,6 +24,6 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./Spring-boot-main
+          context: .
           push: true
           tags: brianyu04/springboot-app:1.0.2
