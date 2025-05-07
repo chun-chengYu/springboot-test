@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>遊戲指令介面 - 勇者冒險物語</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 2em; background-color: #f0f2f5; color: #333; display: flex; flex-direction: column; align-items: center; }
+        .container { width: 100%; max-width: 700px; background-color: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        h2 { text-align: center; color: #333; margin-bottom: 1.5em; }
+        h3 { color: #555; margin-top: 1em; margin-bottom: 0.8em; border-bottom: 1px solid #eee; padding-bottom: 0.3em;}
+
+        #output { margin-top: 1em; background: #f8f9fa; padding: 1em; min-height: 150px; max-height: 300px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 4px; line-height: 1.6; }
+        #command, #playerNameInput, #playerIdToLoad { width: calc(100% - 22px); padding: 10px; margin-bottom:10px; border: 1px solid #ced4da; border-radius: 4px; box-sizing: border-box; font-size: 1em;}
+
+        .button-group { margin-top: 1em; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+        button { padding: 10px 18px; border: none; border-radius: 5px; cursor: pointer; font-size: 0.95em; transition: background-color 0.2s ease-in-out, transform 0.1s ease; }
+        button:hover { transform: translateY(-1px); }
+        button:active { transform: translateY(0px); }
+
+        button[type="submit"], #createCharacterButton, #confirmLoadButton { background-color: #007bff; color: white; }
+        button[type="submit"]:hover, #createCharacterButton:hover, #confirmLoadButton:hover { background-color: #0056b3; }
+
+        #saveButton { background-color: #28a745; color: white;}
+        #saveButton:hover { background-color: #1e7e34; }
+
+        #loadButton, #showLoadGameButton { background-color: #ffc107; color: #212529;}
+        #loadButton:hover, #showLoadGameButton:hover { background-color: #e0a800;}
+
+        #helpButton { background-color: #17a2b8; color: white;}
+        #helpButton:hover { background-color: #117a8b;}
+
+        #newGameButton, #backToCreateButton { background-color: #6c757d; color: white; }
+        #newGameButton:hover, #backToCreateButton:hover { background-color: #545b62; }
+
+
+        .status-bar { background: #f8f9fa; border: 1px solid #e0e0e0; padding: 12px; border-radius: 4px; margin-bottom: 1.5em; text-align: left; font-size: 0.9em; }
+        .status-bar strong {color: #333;}
+
+        .message-log { padding: 8px 12px; border-radius: 4px; margin: 5px 0; font-size: 0.95em; }
+        .error { color: #721c24; background-color: #f8d7da; border: 1px solid #f5c6cb;}
+        .success { color: #155724; background-color: #d4edda; border: 1px solid #c3e6cb;}
+        .info { color: #0c5460; background-color: #d1ecf1; border: 1px solid #bee5eb;}
+
+        #characterCreationSection, #loadGameSection, #gameInterface {
+             margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>🗡️ 泥巴遊戲</h2>
+
+        <div id="characterCreationSection">
+            <h3>創建新泥巴</h3>
+            <input type="text" id="playerNameInput" placeholder="請輸入你的勇者大名" required>
+            <div class="button-group">
+                <button type="button" id="createCharacterButton">✨ 開始新冒險</button>
+                <button type="button" id="showLoadGameButton">📂 讀取已有遊戲</button>
+            </div>
+        </div>
+
+        <div id="loadGameSection" style="display: none;">
+            <h3>讀取遊戲進度</h3>
+            <input type="number" id="playerIdToLoad" placeholder="輸入存檔ID (例如: 1)">
+            <div class="button-group">
+                <button type="button" id="confirmLoadButton">📂 確認讀取</button>
+                <button type="button" id="backToCreateButton">↩️ 返回創建</button>
+            </div>
+        </div>
+
+        <div id="gameInterface" style="display: none;">
+            <div class="status-bar">
+                <strong>玩家狀態:</strong>
+                <span id="playerStatus"></span>
+            </div>
+            <form id="commandForm">
+                <input type="text" id="command" placeholder="輸入指令 (輸入 help 查看幫助)"
+                       autocomplete="off" required>
+                <div class="button-group">
+                    <button type="submit">🚀 執行指令</button>
+                    <button type="button" id="saveButton">💾 立即保存</button>
+                    <button type="button" id="loadButton">🔄 重新載入</button>
+                    <button type="button" id="helpButton">❓ 指令幫助</button>
+                    <button type="button" id="newGameButton">☠️ 放棄重來</button>
+                </div>
+            </form>
+            <div id="output"></div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            let currentPlayer = null;
+            let gameState = {
+                currentRoom: null,
+                monsterHpMap: {}
+            };
+
+            const uiSections = {
+                creation: document.getElementById('characterCreationSection'),
+                load: document.getElementById('loadGameSection'),
+                game: document.getElementById('gameInterface')
+            };
+
+            const elements = {
+                playerNameInput: document.getElementById('playerNameInput'),
+                createCharacterButton: document.getElementById('createCharacterButton'),
+                showLoadGameButton: document.getElementById('showLoadGameButton'),
+                playerIdToLoadInput: document.getElementById('playerIdToLoad'),
+                confirmLoadButton: document.getElementById('confirmLoadButton'),
+                backToCreateButton: document.getElementById('backToCreateButton'),
+                form: document.getElementById('commandForm'),
+                commandInput: document.getElementById('command'),
+                outputDiv: document.getElementById('output'),
+                playerStatus: document.getElementById('playerStatus'),
+                saveButton: document.getElementById('saveButton'),
+                loadButton: document.getElementById('loadButton'),
+                helpButton: document.getElementById('helpButton'),
+                newGameButton: document.getElementById('newGameButton')
+            };
+
+            // 檢查元素是否存在
+            for (const key in elements) {
+                if (!elements[key]) console.error(`錯誤：HTML 元素未找到 - ID 預期為: ${key}`);
+            }
+            for (const key in uiSections) {
+                if (!uiSections[key]) console.error(`錯誤：UI 區塊未找到 - ID 預期為: ${key}`);
+            }
+
+            function showSection(sectionName) {
+                console.log(`[UI] 嘗試顯示區塊: ${sectionName}`);
+                Object.values(uiSections).forEach(section => {
+                    if (section) section.style.display = 'none';
+                });
+                if (uiSections[sectionName]) {
+                    uiSections[sectionName].style.display = 'block';
+                } else {
+                    console.error(`[UI] 錯誤：找不到要顯示的區塊 ${sectionName}`);
+                }
+                if (sectionName !== 'game' && elements.outputDiv) elements.outputDiv.innerHTML = '';
+            }
+
+            async function handleAPICall(url, method = 'GET', data = null) {
+                const options = { method, headers: { 'Content-Type': 'application/json' } };
+                if (data && method !== 'GET') options.body = JSON.stringify(data);
+                console.log(`[API] 發送請求: ${method} ${url}`, data || '');
+                try {
+                    const response = await fetch(url, options);
+                    let responseData;
+                    const contentType = response.headers.get("content-type");
+                    if (contentType && contentType.includes("application/json")) {
+                        responseData = await response.json();
+                    } else {
+                        const textResponse = await response.text();
+                        if (!response.ok) throw new Error(`伺服器錯誤 ${response.status}: ${textResponse.substring(0,100)}`);
+                        return { messages: [textResponse || "操作成功但無JSON返回"] };
+                    }
+                    console.log(`[API] 收到響應 (${url}):`, responseData);
+                    if (!response.ok) {
+                        const errorMsg = responseData?.messages?.join(', ') || responseData?.message || responseData?.error || `伺服器錯誤 ${response.status}`;
+                        throw new Error(errorMsg);
+                    }
+                    return responseData;
+                } catch (error) {
+                    console.error(`[API] 請求 ${method} ${url} 失敗:`, error);
+                    throw error;
+                }
+            }
+
+            function updateAndDisplayGameData(data, successMessage = null, isNewGameMessage = true) {
+                if (data.player) currentPlayer = data.player;
+                if (data.gameState) {
+                    gameState.currentRoom = data.gameState.currentRoom;
+                    gameState.monsterHpMap = data.gameState.monsterHpMap || {};
+                }
+                updatePlayerStatus();
+                if (successMessage) appendMessage(successMessage, 'success');
+                if (isNewGameMessage && currentPlayer) {
+                    const welcomeType = successMessage?.includes("創建成功") ? "新遊戲" : (successMessage?.includes("讀取成功") ? "歡迎回來" : null);
+                    if (welcomeType === "新遊戲") appendMessage(`👾 [ 遊戲開始！歡迎勇者 ${currentPlayer.name}！ ]`, 'info');
+                    else if (welcomeType === "歡迎回來") appendMessage(`↩️ [ 歡迎回來，勇者 ${currentPlayer.name}！ ]`, 'info');
+                }
+            }
+            
+            if (elements.createCharacterButton) {
+                elements.createCharacterButton.addEventListener('click', async () => {
+                    console.log('[Event] 「開始新冒險」按鈕點擊');
+                    const playerName = elements.playerNameInput.value.trim();
+                    if (!playerName) { appendMessage("❌ 請輸入勇者名稱！", 'error'); return; }
+                    appendMessage("🔄 正在創建角色...", 'info');
+                    try {
+                        const data = await handleAPICall('/api/player/create', 'POST', { name: playerName });
+                        updateAndDisplayGameData(data, `✅ 勇者 ${data.player.name} 創建成功！(ID: ${data.player.id})`);
+                        showSection('game');
+                        await sendCommand("look");
+                    } catch (error) { appendMessage(`❌ 角色創建失敗: ${error.message}`, 'error'); }
+                });
+            }
+
+            if (elements.showLoadGameButton) elements.showLoadGameButton.addEventListener('click', () => { console.log('[Event] 「讀取已有遊戲」按鈕點擊'); showSection('load'); });
+            if (elements.backToCreateButton) elements.backToCreateButton.addEventListener('click', () => { console.log('[Event] 「返回創建」按鈕點擊'); showSection('creation'); });
+
+            async function fetchPlayerAndStartGame(playerId) {
+                if (!playerId) { appendMessage("❌ 未提供玩家ID。", 'error'); return; }
+                appendMessage(`🔄 正在讀取 ID: ${playerId} 的存檔...`, 'info');
+                try {
+                    const data = await handleAPICall(`/api/player/load/${playerId}`); // GET請求不需要body
+                    updateAndDisplayGameData(data, `📂 遊戲讀取成功！`);
+                    showSection('game');
+                    await sendCommand("look");
+                } catch (error) { appendMessage(`❌ 讀取失敗 (ID: ${playerId}): ${error.message}`, 'error'); }
+            }
+
+            if (elements.confirmLoadButton) elements.confirmLoadButton.addEventListener('click', () => { console.log('[Event] 「確認讀取」按鈕點擊'); fetchPlayerAndStartGame(elements.playerIdToLoadInput.value.trim()); });
+            if (elements.loadButton) elements.loadButton.addEventListener('click', () => {
+                console.log('[Event] 「重新載入」按鈕點擊');
+                if (currentPlayer && currentPlayer.id) fetchPlayerAndStartGame(currentPlayer.id);
+                else { appendMessage("ℹ️ 沒有當前角色可重新載入。", 'info'); showSection('load'); }
+            });
+            
+            if (elements.newGameButton) elements.newGameButton.addEventListener('click', () => {
+                console.log('[Event] 「放棄重來」按鈕點擊');
+                if (confirm("確定要放棄目前進度並重新開始嗎？未保存的數據將會遺失！")) {
+                    currentPlayer = null;
+                    gameState = { currentRoom: null, monsterHpMap: {} };
+                    if (elements.commandInput) elements.commandInput.value = '';
+                    showSection('creation');
+                    updatePlayerStatus();
+                    appendMessage('👋 請重新創建角色或讀取進度。', 'info');
+                }
+            });
+
+            async function sendCommand(commandText) {
+                const cmd = commandText.trim();
+                if (!cmd) return;
+                if (!currentPlayer || currentPlayer.id == null) { appendMessage("❌ 請先創建或加載角色！", 'error'); return; }
+                const payload = { input: cmd, playerId: currentPlayer.id }; // 發送 playerId
+                console.log('[Command] 發送指令:', payload);
+                try {
+                    const data = await handleAPICall('/api/game/command', 'POST', payload);
+                    if (data.messages) data.messages.forEach(msg => appendMessage(msg, msg.toLowerCase().includes("錯誤") || msg.toLowerCase().includes("無效") || msg.toLowerCase().includes("失敗") ? 'error' : 'info'));
+                    if (data.player) Object.assign(currentPlayer, data.player);
+                    if (data.gameState) {
+                        gameState.currentRoom = data.gameState.currentRoom !== undefined ? data.gameState.currentRoom : gameState.currentRoom;
+                        gameState.monsterHpMap = data.gameState.monsterHpMap !== undefined ? data.gameState.monsterHpMap : gameState.monsterHpMap;
+                    }
+                    updatePlayerStatus();
+                } catch (error) { appendMessage(`❌ 指令處理失敗: ${error.message}`, 'error'); }
+            }
+
+            if (elements.form) elements.form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                console.log('[Event] 指令表單提交');
+                if (elements.commandInput) { await sendCommand(elements.commandInput.value); elements.commandInput.value = ''; }
+            });
+
+            if (elements.saveButton) elements.saveButton.addEventListener('click', async () => {
+                console.log('[Event] 「立即保存」按鈕點擊');
+                if (!currentPlayer || currentPlayer.id == null) { appendMessage("❌ 沒有角色數據可保存。", 'error'); return; }
+                const saveData = {
+                    id: currentPlayer.id,
+                    name: currentPlayer.name,
+                    hp: currentPlayer.hp,
+                    maxHp: currentPlayer.maxHp,
+                    attack: currentPlayer.attack,
+                    level: currentPlayer.level,
+                    skillNames: currentPlayer.skillNames || [],
+                    totalDamage: currentPlayer.totalDamage || 0,
+                    killCount: currentPlayer.killCount || 0,
+                    usedSkills: currentPlayer.usedSkills || [],
+                    inventory: currentPlayer.inventory || {},
+                    gameState: {
+                        currentRoom: gameState.currentRoom,
+                        monsterHpMap: gameState.monsterHpMap || {}
+                    }
+                };
+                console.log("準備發送到 /api/player/save 的數據:", JSON.stringify(saveData, null, 2));
+                appendMessage("🔄 正在保存進度...", 'info');
+                try {
+                    const responseData = await handleAPICall('/api/player/save', 'POST', saveData);
+                    if (responseData.player) Object.assign(currentPlayer, responseData.player);
+                    if (responseData.gameState) {
+                        gameState.currentRoom = responseData.gameState.currentRoom !== undefined ? responseData.gameState.currentRoom : gameState.currentRoom;
+                        gameState.monsterHpMap = responseData.gameState.monsterHpMap !== undefined ? responseData.gameState.monsterHpMap : gameState.monsterHpMap;
+                    }
+                    updatePlayerStatus();
+                    appendMessage(`✅ 保存成功！玩家ID: ${currentPlayer.id}`, 'success');
+                } catch (error) { appendMessage(`❌ 保存失敗: ${error.message}`, 'error'); }
+            });
+
+            if (elements.helpButton) elements.helpButton.addEventListener('click', () => {
+                console.log('[Event] 「指令幫助」按鈕點擊');
+                const helpMessages = [ /* ...幫助訊息不變... */ ];
+                helpMessages.forEach(msg => appendMessage(msg, 'info'));
+            });
+
+            function updatePlayerStatus() {
+                if (!elements.playerStatus) { console.warn("[UI] playerStatus 元素未找到。"); return; }
+                if (currentPlayer && currentPlayer.id != null) {
+                    let locationName = "未知地點";
+                    if(gameState.currentRoom) {
+                        const roomMap = {"forest_entrance": "森林入口", "temple_hall": "神殿大廳"};
+                        locationName = roomMap[gameState.currentRoom.toLowerCase()] || gameState.currentRoom;
+                    }
+                    elements.playerStatus.textContent = `ID: ${currentPlayer.id} | 勇者: ${currentPlayer.name} | HP: ${currentPlayer.hp}/${currentPlayer.maxHp} | 攻擊力: ${currentPlayer.attack} | 等級: ${currentPlayer.level} | 擊殺: ${currentPlayer.killCount} | 位置: ${locationName}`;
+                } else {
+                    elements.playerStatus.textContent = "請創建新角色或讀取已有進度。";
+                }
+            }
+
+            function appendMessage(text, type = 'info') {
+                if (!elements.outputDiv) { console.warn("[UI] outputDiv 元素未找到，無法附加訊息:", text); return; }
+                const div = document.createElement('div');
+                div.className = `message-log ${type}`;
+                div.textContent = text;
+                while (elements.outputDiv.childNodes.length > 70) {
+                    elements.outputDiv.removeChild(elements.outputDiv.firstChild);
+                }
+                elements.outputDiv.appendChild(div);
+                elements.outputDiv.scrollTop = elements.outputDiv.scrollHeight;
+            }
+
+            // 初始化
+            if (uiSections.creation) showSection('creation');
+            else console.error("嚴重錯誤：角色創建區塊 (characterCreationSection) 未在 HTML 中定義！");
+            updatePlayerStatus();
+            appendMessage('👋 歡迎來到勇者冒險物語！請創建新角色或讀取已有進度開始你的旅程。', 'info');
+        });
+    </script>
+</body>
+</html>
